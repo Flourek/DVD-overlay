@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DVD</title>
+  <style>
+    body {
+      margin: 0;
+      box-sizing: border-box;
+      overflow: hidden;
+    }
+
+    #black {
+      height: 100vh;
+      width: 100vw;
+      background-color: #111;
+    }
+
+    .dvd {
+      position: absolute;
+      left: 0px;
+      top: 0px;
+      opacity: 0;
+      transition: opacity 1s;
+    }
+
+    .dvd img {
+      height: 84px;
+      width: auto;
+      display: block;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="black"></div>
+
+  <script src="tmi.min.js"></script>
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const channel = params.get("channel");
+    const redeemName = params.get("redeem");
+    const duration = parseInt(params.get("duration")) || 45;
+    const originXParam = params.get("originX");
+    const originYParam = params.get("originY");
+    const angleParam = params.get("angle");
+    const sizeScalar = parseFloat(params.get("size")) || 1;
+    const speedMult = parseFloat(params.get("speedMult")) || 1;
+
+    const baseSpeed = 2;
+    const bouncers = [];
+    let lastEmote = null;
+    let emoteMap = {};
+    let twitchId = null;
+
+    function spawnBouncer(emote) {
+      if (!emote || !emote.url) return;
+
+      const img = document.createElement("img");
+      img.src = emote.url;
+      img.style.height = (84 * sizeScalar) + "px";
+
+      const el = document.createElement("div");
+      el.className = "dvd";
+      el.appendChild(img);
+      document.getElementById("black").appendChild(el);
+
+      const speedVar = baseSpeed * speedMult * (0.9 + Math.random() * 0.2);
+      const bouncer = { el, x: 0, y: 0, vx: 0, vy: 0, speed: speedVar, alive: true };
+
+      img.onload = () => {
+        requestAnimationFrame(() => {
+          const sw = document.body.clientWidth;
+          const sh = document.body.clientHeight;
+          const dw = el.clientWidth;
+          const dh = el.clientHeight;
+
+          const ox = originXParam !== null ? parseFloat(originXParam) / 100 : 0.5;
+          const oy = originYParam !== null ? parseFloat(originYParam) / 100 : 0.5;
+          bouncer.x = Math.max(0, Math.min(sw - dw, ox * (sw - dw)));
+          bouncer.y = Math.max(0, Math.min(sh - dh, oy * (sh - dh)));
+
+          const angleDeg = (angleParam !== null ? parseFloat(angleParam) : 20 + Math.random() * 50) + (Math.random() * 10 - 5);
+          const angle = angleDeg * Math.PI / 180;
+          bouncer.vx = Math.cos(angle) * bouncer.speed;
+          bouncer.vy = Math.sin(angle) * bouncer.speed;
+
+          el.style.left = bouncer.x + "px";
+          el.style.top = bouncer.y + "px";
+
+          requestAnimationFrame(() => {
+            el.style.opacity = "1";
+          });
+          setTimeout(() => {
+            el.style.transition = "";
+          }, 1000);
+        });
+      };
+
+      setTimeout(() => {
+        el.style.transition = "opacity 1s";
+        el.style.opacity = "0";
+        setTimeout(() => {
+          bouncer.alive = false;
+          el.remove();
+        }, 1000);
+      }, duration * 1000);
+
+      bouncers.push(bouncer);
+    }
+
+    function resolveCollision(a, b) {
+      const aw = a.el.clientWidth, ah = a.el.clientHeight;
+      const bw = b.el.clientWidth, bh = b.el.clientHeight;
+      const acx = a.x + aw / 2, acy = a.y + ah / 2;
+      const bcx = b.x + bw / 2, bcy = b.y + bh / 2;
+      const dx = bcx - acx;
+      const dy = bcy - acy;
+      const overlapX = (aw + bw) / 2 - Math.abs(dx);
+      const overlapY = (ah + bh) / 2 - Math.abs(dy);
+
+      if (overlapX < overlapY) {
+        const push = (overlapX / 2) + 2;
+        if (dx > 0) { a.x -= push; b.x += push; }
+        else { a.x += push; b.x -= push; }
+        const tmp = a.vx;
+        a.vx = b.vx;
+        b.vx = tmp;
+      } else {
+        const push = (overlapY / 2) + 2;
+        if (dy > 0) { a.y -= push; b.y += push; }
+        else { a.y += push; b.y -= push; }
+        const tmp = a.vy;
+        a.vy = b.vy;
+        b.vy = tmp;
+      }
+    }
+
+    function animate() {
+      const sw = document.body.clientWidth;
+      const sh = document.body.clientHeight;
+
+      for (let i = bouncers.length - 1; i >= 0; i--) {
+        const b = bouncers[i];
+        if (!b.alive) {
+          bouncers.splice(i, 1);
+          continue;
+        }
+        const dw = b.el.clientWidth || 84;
+        const dh = b.el.clientHeight || 84;
+
+        if (b.y + dh >= sh || b.y < 0) b.vy *= -1;
+        if (b.x + dw >= sw || b.x < 0) b.vx *= -1;
+        b.x += b.vx;
+        b.y += b.vy;
+        b.el.style.left = b.x + "px";
+        b.el.style.top = b.y + "px";
+      }
+
+      for (let i = 0; i < bouncers.length; i++) {
+        for (let j = i + 1; j < bouncers.length; j++) {
+          const a = bouncers[i];
+          const b = bouncers[j];
+          if (!a.alive || !b.alive) continue;
+          const aw = a.el.clientWidth, ah = a.el.clientHeight;
+          const bw = b.el.clientWidth, bh = b.el.clientHeight;
+          const acx = a.x + aw / 2, acy = a.y + ah / 2;
+          const bcx = b.x + bw / 2, bcy = b.y + bh / 2;
+          if (Math.abs(bcx - acx) < (aw + bw) / 2 && Math.abs(bcy - acy) < (ah + bh) / 2) {
+            resolveCollision(a, b);
+          }
+        }
+      }
+
+      window.requestAnimationFrame(animate);
+    }
+
+    function extractFirstEmote(message, tags) {
+      let firstEmote = null;
+      let firstPos = Infinity;
+
+      if (tags && tags.emotes) {
+        for (const [id, positions] of Object.entries(tags.emotes)) {
+          for (const pos of positions) {
+            const [start] = pos.split("-").map(Number);
+            if (start < firstPos) {
+              firstPos = start;
+              firstEmote = { url: `https://static-cdn.jtvnw.net/emoticons/v2/${id}/default/dark/3.0`, name: null };
+            }
+          }
+        }
+      }
+
+      const words = message.split(" ");
+      let charIdx = 0;
+      for (const word of words) {
+        if (emoteMap[word] && charIdx < firstPos) {
+          firstEmote = emoteMap[word];
+          firstPos = charIdx;
+        }
+        charIdx += word.length + 1;
+      }
+
+      return firstEmote;
+    }
+
+    function loadEmotes() {
+      if (!channel) return;
+
+      fetch(`https://api.frankerfacez.com/v1/room/${channel}`)
+        .then(r => r.json())
+        .then(data => {
+          const set = data.sets[data.room.set];
+          if (set) {
+            for (const e of set.emoticons) {
+              emoteMap[e.name] = { url: `https:${e.urls["4"] || e.urls["2"] || e.urls["1"]}`, name: e.name };
+            }
+          }
+        })
+        .catch(() => { });
+
+      fetch("https://api.frankerfacez.com/v1/set/global")
+        .then(r => r.json())
+        .then(data => {
+          for (const setId of data.default_sets) {
+            if (data.sets[setId]) {
+              for (const e of data.sets[setId].emoticons) {
+                if (!emoteMap[e.name]) {
+                  emoteMap[e.name] = { url: `https:${e.urls["4"] || e.urls["2"] || e.urls["1"]}`, name: e.name };
+                }
+              }
+            }
+          }
+        })
+        .catch(() => { });
+
+      fetch("https://api.betterttv.net/3/cached/emotes/global")
+        .then(r => r.json())
+        .then(data => {
+          for (const e of data) {
+            if (!emoteMap[e.code]) {
+              emoteMap[e.code] = { url: `https://cdn.betterttv.net/emote/${e.id}/3x${e.imageType === "gif" ? ".gif" : ""}`, name: e.code };
+            }
+          }
+        })
+        .catch(() => { });
+
+      fetch(`https://api.ivr.fi/v2/twitch/user?login=${channel}`)
+        .then(r => r.json())
+        .then(data => {
+          if (data[0] && data[0].id) {
+            twitchId = data[0].id;
+            fetch(`https://7tv.io/v3/users/twitch/${twitchId}`)
+              .then(r => r.json())
+              .then(data7tv => {
+                if (data7tv.emote_set && data7tv.emote_set.emotes) {
+                  for (const e of data7tv.emote_set.emotes) {
+                    if (!emoteMap[e.name]) {
+                      emoteMap[e.name] = { url: `https://cdn.7tv.app/emote/${e.id}/4x.webp`, name: e.name };
+                    }
+                  }
+                }
+              })
+              .catch(() => { });
+
+            fetch(`https://api.betterttv.net/3/cached/users/twitch/${twitchId}`)
+              .then(r => r.json())
+              .then(dataBttv => {
+                const all = [...(dataBttv.channelEmotes || []), ...(dataBttv.sharedEmotes || [])];
+                for (const e of all) {
+                  if (!emoteMap[e.code]) {
+                    emoteMap[e.code] = { url: `https://cdn.betterttv.net/emote/${e.id}/3x${e.imageType === "gif" ? ".gif" : ""}`, name: e.code };
+                  }
+                }
+              })
+              .catch(() => { });
+          }
+        })
+        .catch(() => { });
+    }
+
+    if (channel && typeof tmi !== "undefined") {
+      loadEmotes();
+
+      const client = new tmi.Client({
+        channels: [channel]
+      });
+
+      client.connect().catch(console.error);
+
+      client.on("message", (chan, tags, message) => {
+        if (!twitchId && tags["room-id"]) {
+          twitchId = tags["room-id"];
+          fetch(`https://7tv.io/v3/users/twitch/${twitchId}`)
+            .then(r => r.json())
+            .then(data => {
+              if (data.emote_set && data.emote_set.emotes) {
+                for (const e of data.emote_set.emotes) {
+                  if (!emoteMap[e.name]) {
+                    emoteMap[e.name] = { url: `https://cdn.7tv.app/emote/${e.id}/4x.webp`, name: e.name };
+                  }
+                }
+              }
+            })
+            .catch(() => { });
+
+          fetch(`https://api.betterttv.net/3/cached/users/twitch/${twitchId}`)
+            .then(r => r.json())
+            .then(data => {
+              const all = [...(data.channelEmotes || []), ...(data.sharedEmotes || [])];
+              for (const e of all) {
+                if (!emoteMap[e.code]) {
+                  emoteMap[e.code] = { url: `https://cdn.betterttv.net/emote/${e.id}/3x${e.imageType === "gif" ? ".gif" : ""}`, name: e.code };
+                }
+              }
+            })
+            .catch(() => { });
+        }
+
+        const emote = extractFirstEmote(message, tags);
+        if (emote) lastEmote = emote;
+
+        if (tags["custom-reward-id"] && redeemName) {
+          spawnBouncer(lastEmote);
+        }
+      });
+
+      client.on("redeem", (chan, username, rewardType, tags) => {
+        if (redeemName && rewardType.toLowerCase() === redeemName.toLowerCase()) {
+          spawnBouncer(lastEmote);
+        }
+      });
+    }
+
+    window.requestAnimationFrame(animate);
+  </script>
+</body>
+
+</html>
