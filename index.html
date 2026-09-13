@@ -12,10 +12,13 @@
       overflow: hidden;
     }
 
+    * {
+      background-color: transparent !important;
+    }
+
     #black {
       height: 100vh;
       width: 100vw;
-      background-color: #111;
     }
 
     .dvd {
@@ -48,18 +51,19 @@
     const angleParam = params.get("angle");
     const sizeScalar = parseFloat(params.get("size")) || 1;
     const speedMult = parseFloat(params.get("speedMult")) || 1;
+    const speedParam = parseFloat(params.get("speed"));
 
-    const baseSpeed = 2;
+    const baseSpeed = 120 * (isNaN(speedParam) ? 1 : speedParam); // px per second
     const bouncers = [];
     let lastEmote = null;
     let emoteMap = {};
     let twitchId = null;
 
     function spawnBouncer(emote) {
-      if (!emote || !emote.url) return;
+      const url = emote && emote.url ? emote.url : "dvd.webp";
 
       const img = document.createElement("img");
-      img.src = emote.url;
+      img.src = url;
       img.style.height = (84 * sizeScalar) + "px";
 
       const el = document.createElement("div");
@@ -138,7 +142,12 @@
       }
     }
 
-    function animate() {
+    let lastFrame = null;
+
+    function animate(now) {
+      const dt = lastFrame === null ? 1 / 60 : Math.min((now - lastFrame) / 1000, 0.05);
+      lastFrame = now;
+
       const sw = document.body.clientWidth;
       const sh = document.body.clientHeight;
 
@@ -151,10 +160,14 @@
         const dw = b.el.clientWidth || 84;
         const dh = b.el.clientHeight || 84;
 
-        if (b.y + dh >= sh || b.y < 0) b.vy *= -1;
-        if (b.x + dw >= sw || b.x < 0) b.vx *= -1;
-        b.x += b.vx;
-        b.y += b.vy;
+        b.x += b.vx * dt;
+        b.y += b.vy * dt;
+
+        if (b.y + dh >= sh) { b.y = sh - dh; b.vy = -Math.abs(b.vy); }
+        else if (b.y < 0) { b.y = 0; b.vy = Math.abs(b.vy); }
+        if (b.x + dw >= sw) { b.x = sw - dw; b.vx = -Math.abs(b.vx); }
+        else if (b.x < 0) { b.x = 0; b.vx = Math.abs(b.vx); }
+
         b.el.style.left = b.x + "px";
         b.el.style.top = b.y + "px";
       }
@@ -320,7 +333,11 @@
         }
 
         const emote = extractFirstEmote(message, tags);
-        if (emote) lastEmote = emote;
+        if (emote) {
+          lastEmote = emote;
+        } else {
+          lastEmote = { url: "dvd.webp" };
+        }
 
         if (tags["custom-reward-id"] && redeemName) {
           spawnBouncer(lastEmote);
