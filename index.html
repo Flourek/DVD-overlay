@@ -30,7 +30,7 @@
     }
 
     .dvd img {
-      height: 84px;
+      height: 42px;
       width: auto;
       display: block;
     }
@@ -64,7 +64,7 @@
 
       const img = document.createElement("img");
       img.src = url;
-      img.style.height = (84 * sizeScalar) + "px";
+      img.style.height = (42 * sizeScalar) + "px";
 
       const el = document.createElement("div");
       el.className = "dvd";
@@ -157,8 +157,8 @@
           bouncers.splice(i, 1);
           continue;
         }
-        const dw = b.el.clientWidth || 84;
-        const dh = b.el.clientHeight || 84;
+        const dw = b.el.clientWidth || 42;
+        const dh = b.el.clientHeight || 42;
 
         b.x += b.vx * dt;
         b.y += b.vy * dt;
